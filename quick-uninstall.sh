@@ -8,7 +8,6 @@
 
 set -uo pipefail
 
-REPO_URL="https://github.com/tolakang/netbird-autoupdate.git"
 REPO_DIR="/opt/netbird-autoupdate-repo"
 RAW_URL="https://raw.githubusercontent.com/tolakang/netbird-autoupdate/main"
 
