@@ -32,12 +32,38 @@ After running the installer, files are placed in:
 
 ## Installation
 
-### 🚀 Quick Deploy (Recommended)
+### 🚀 One-Line Install (Easiest)
+
+**Auto-detect install directory:**
+```bash copy
+curl -fsSL https://raw.githubusercontent.com/tolakang/netbird-autoupdate/main/quick-install.sh | sudo bash
+```
+
+**With explicit install path:**
+```bash copy
+curl -fsSL https://raw.githubusercontent.com/tolakang/netbird-autoupdate/main/quick-install.sh | sudo bash /srv/netbird
+```
+
+This command:
+1. ✅ Clones repo to `/opt/netbird-autoupdate-repo` (or updates if exists)
+2. ✅ Runs `deploy-all.sh` with auto-detection
+3. ✅ Works even if you've cloned the repo before (no "directory exists" error)
+
+---
+
+### 🚀 Quick Deploy (Manual Clone)
 
 **Zero-config (auto-detects install directory):**
 ```bash copy
 git clone https://github.com/tolakang/netbird-autoupdate.git && cd netbird-autoupdate && sudo ./scripts/deploy-all.sh
 ```
+
+> **If you get "destination path already exists"**, either delete the directory first:
+> ```bash
+> rm -rf netbird-autoupdate
+> git clone https://github.com/tolakang/netbird-autoupdate.git && cd netbird-autoupdate && sudo ./scripts/deploy-all.sh
+> ```
+> Or use the one-line installer above which handles this automatically.
 
 The installer will automatically search these locations:
 - `/opt/netbird` (default)
@@ -176,9 +202,25 @@ Each backup is timestamped, only 30 newest items per type kept.
 
 To remove the NetBird auto-update system completely:
 
-### One-command uninstall (auto-detects install directory):
+### One-Line Uninstall (Easiest)
 ```bash copy
+curl -fsSL https://raw.githubusercontent.com/tolakang/netbird-autoupdate/main/quick-uninstall.sh | sudo bash
+```
+
+### With explicit install path:
+```bash copy
+curl -fsSL https://raw.githubusercontent.com/tolakang/netbird-autoupdate/main/quick-uninstall.sh | sudo bash /srv/netbird
+```
+
+### Or if repo is cloned locally:
+```bash copy
+cd /opt/netbird-autoupdate-repo
 sudo ./scripts/uninstall.sh
+```
+
+### Or with auto-detect from repo dir:
+```bash copy
+sudo /opt/netbird-autoupdate-repo/scripts/uninstall.sh
 ```
 
 ### With explicit path:
