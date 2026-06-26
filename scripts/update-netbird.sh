@@ -7,11 +7,19 @@ set -Eeuo pipefail
 # Path: /opt/netbird/scripts/update-netbird.sh
 ##############################################
 
-readonly COMPOSE_DIR="/opt/netbird"
-readonly COMPOSE_FILE="${COMPOSE_DIR}/docker-compose.yml"
-readonly BACKUP_DIR="${COMPOSE_DIR}/backups"
-readonly SERVICES=(netbird-server dashboard proxy)
-readonly BACKUP_FILES=("docker-compose.yml" "config.yaml" "dashboard.env" "proxy.env")
+# Allow override via environment variable, default to standard /opt/netbird
+readonly COMPOSE_DIR="${COMPOSE_DIR:-/opt/netbird}"
+readonly COMPOSE_FILE="${COMPOSE_FILE:-${COMPOSE_DIR}/docker-compose.yml}"
+readonly BACKUP_DIR="${BACKUP_DIR:-${COMPOSE_DIR}/backups}"
+readonly SERVICES=(${SERVICES[@]:-netbird-server dashboard proxy})
+readonly BACKUP_FILES=(${BACKUP_FILES[@]:-docker-compose.yml config.yaml dashboard.env proxy.env})
+
+# Validate compose file exists
+if [[ ! -f "$COMPOSE_FILE" ]]; then
+    echo "[$(date '+%F %T')] ERROR: Docker compose file not found at: $COMPOSE_FILE"
+    echo "Set COMPOSE_DIR environment variable to your NetBird installation directory."
+    exit 1
+fi
 
 # Create backup directory
 mkdir -p "$BACKUP_DIR"

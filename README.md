@@ -10,17 +10,20 @@ After running the installer, files are placed in:
 
 | Path | Purpose |
 |------|---------|
-| `/opt/netbird/scripts/update-netbird.sh` | Main update script (executed by systemd) |
+| `<INSTALL_DIR>/scripts/update-netbird.sh` | Main update script (executed by systemd) |
 | `/etc/systemd/system/netbird-update.service` | Systemd service unit |
 | `/etc/systemd/system/netbird-update.timer` | Systemd timer unit (weekly) |
-| `/opt/netbird/backups/` | Timestamped backups (auto-managed) |
+| `<INSTALL_DIR>/backups/` | Timestamped backups (auto-managed) |
+
+> **Default `INSTALL_DIR` is `/opt/netbird`** (where NetBird quick-start installs by default).
+> You can override this if NetBird is installed elsewhere.
 
 ---
 
 ## Prerequisites
 - Ubuntu 20.04+ with `systemd`
 - Docker Engine **with** Compose v2 plugin (`docker compose`)
-- NetBird already installed via the official quick-start script (defaults to `/opt/netbird`)
+- NetBird already installed via the official quick-start script
 - Git installed (`sudo apt install git`)
 
 ---
@@ -29,22 +32,33 @@ After running the installer, files are placed in:
 
 ### 🚀 Quick Deploy (Recommended)
 
-**One-command deployment:**
+**Standard installation (NetBird at `/opt/netbird`):**
 ```bash copy
 git clone https://github.com/tolakang/netbird-autoupdate.git && cd netbird-autoupdate && sudo ./scripts/deploy-all.sh
 ```
 
-This single command:
-1. Copies `update-netbird.sh` → `/opt/netbird/scripts/update-netbird.sh`
-2. Copies systemd units → `/etc/systemd/system/`
-3. Reloads systemd
-4. Enables the weekly timer (Sun 03:00 with 15min randomization)
+**Custom install directory** (e.g., if NetBird is at `/srv/netbird`):
+```bash copy
+git clone https://github.com/tolakang/netbird-autoupdate.git && cd netbird-autoupdate && sudo ./scripts/deploy-all.sh /srv/netbird
+```
+
+**Or via environment variable:**
+```bash copy
+sudo INSTALL_DIR=/srv/netbird ./scripts/deploy-all.sh
+```
+
+This command:
+1. Validates the install directory exists and contains `docker-compose.yml`
+2. Copies `update-netbird.sh` → `<INSTALL_DIR>/scripts/update-netbird.sh`
+3. Copies systemd units → `/etc/systemd/system/` (with paths patched to your `INSTALL_DIR`)
+4. Reloads systemd
+5. Enables the weekly timer (Sun 03:00 with 15min randomization)
 
 ---
 
 ### Manual Installation (Alternative)
 
-If you prefer step-by-step:
+If you prefer step-by-step or have a custom directory:
 
 #### 1. Clone repository
 ```bash copy
@@ -52,24 +66,35 @@ git clone https://github.com/tolakang/netbird-autoupdate.git
 cd netbird-autoupdate
 ```
 
-#### 2. Create directories
+#### 2. Install script
 ```bash copy
-sudo mkdir -p /opt/netbird/scripts /etc/systemd/system
+# Default: /opt/netbird
+sudo ./scripts/deploy-all.sh
+
+# Or custom directory:
+sudo ./scripts/deploy-all.sh /srv/netbird
 ```
 
-#### 3. Copy files
+#### 3. Or manually copy files:
 ```bash copy
-# Update script
-sudo cp scripts/update-netbird.sh /opt/netbird/scripts/update-netbird.sh
-sudo chmod +x /opt/netbird/scripts/update-netbird.sh
+# Set your NetBird directory
+export NB_DIR=/opt/netbird   # change if different
 
-# Systemd units (must go to /etc/systemd/system/)
+# Create directories
+sudo mkdir -p "$NB_DIR/scripts" /etc/systemd/system
+
+# Copy update script
+sudo cp scripts/update-netbird.sh "$NB_DIR/scripts/update-netbird.sh"
+sudo chmod +x "$NB_DIR/scripts/update-netbird.sh"
+
+# Copy systemd units
 sudo cp systemd/netbird-update.service /etc/systemd/system/
 sudo cp systemd/netbird-update.timer   /etc/systemd/system/
-```
 
-#### 4. Enable and start the timer
-```bash copy
+# Patch paths in service file to match your NB_DIR
+sudo sed -i "s|/opt/netbird|$NB_DIR|g" /etc/systemd/system/netbird-update.service
+
+# Enable timer
 sudo systemctl daemon-reload
 sudo systemctl enable --now netbird-update.timer
 ```
@@ -106,16 +131,17 @@ Each backup is timestamped, only 30 newest items per type kept.
 ---
 
 ## Customisation
-- **Change NetBird directory** – edit `/etc/systemd/system/netbird-update.service`, add `Environment=COMPOSE_DIR=/new/path`
+- **Change NetBird directory** – run `./scripts/deploy-all.sh /new/path` or edit `Environment=COMPOSE_DIR=` in the service file
 - **Adjust schedule** – modify `OnCalendar` in `/etc/systemd/system/netbird-update.timer` (e.g., `OnCalendar=Mon *-*-* 02:00`)
-- **Retention count** – edit `tail -n +31` in `/opt/netbird/scripts/update-netbird.sh` (`+31` → `+<N+1>` for different limit)
+- **Retention count** – edit `tail -n +31` in the update script (`+31` → `+<N+1>` for different limit)
+- **Custom services list** – set `SERVICES="svc1 svc2"` environment variable before running
 
 ---
 
 ## Security Hardening (systemd)
 - `ProtectSystem=full` – root filesystem read-only for service  
 - `PrivateTmp=yes` – isolates `/tmp`  
-- `ReadWritePaths=/opt/netbird /opt/netbird/backups /run` – limited write permissions  
+- `ReadWritePaths=<INSTALL_DIR> <INSTALL_DIR>/backups /run` – limited write permissions  
 - `Nice=10` – lowers CPU priority
 
 ---
