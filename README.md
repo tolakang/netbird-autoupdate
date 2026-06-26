@@ -4,24 +4,23 @@ A production‑ready solution to keep a NetBird self‑hosted installation on Ub
 
 ---
 
-## 📦 Repository Structure
-```
-/opt/netbird/                 ← Target installation directory (on your server)
-├─ scripts/
-│  ├─ update-netbird.sh       # Main update script
-│  └─ deploy-all.sh           # One-line installer (run from cloned repo)
-├─ systemd/
-│  ├─ netbird-update.service  # systemd service definition
-│  └─ netbird-update.timer    # Weekly timer (Sun 03:00)
-└─ backups/                   # Timestamped backups (auto‑managed)
-```
+## 📦 Installation Layout
+
+After running the installer, files are placed in:
+
+| Path | Purpose |
+|------|---------|
+| `/opt/netbird/scripts/update-netbird.sh` | Main update script (executed by systemd) |
+| `/etc/systemd/system/netbird-update.service` | Systemd service unit |
+| `/etc/systemd/system/netbird-update.timer` | Systemd timer unit (weekly) |
+| `/opt/netbird/backups/` | Timestamped backups (auto-managed) |
 
 ---
 
 ## Prerequisites
 - Ubuntu 20.04+ with `systemd`
 - Docker Engine **with** Compose v2 plugin (`docker compose`)
-- NetBird already installed via the official quick‑start script (defaults to `/opt/netbird`)
+- NetBird already installed via the official quick-start script (defaults to `/opt/netbird`)
 - Git installed (`sudo apt install git`)
 
 ---
@@ -30,16 +29,14 @@ A production‑ready solution to keep a NetBird self‑hosted installation on Ub
 
 ### 🚀 Quick Deploy (Recommended)
 
-**Step 1.Clone the repository and run the installer:**
+**One-command deployment:**
 ```bash copy
-git clone https://github.com/tolakang/netbird-autoupdate.git
-cd netbird-autoupdate
-sudo ./scripts/deploy-all.sh
+git clone https://github.com/tolakang/netbird-autoupdate.git && cd netbird-autoupdate && sudo ./scripts/deploy-all.sh
 ```
 
 This single command:
 1. Copies `update-netbird.sh` → `/opt/netbird/scripts/update-netbird.sh`
-2. Copies systemd units → `/opt/netbird/systemd/`
+2. Copies systemd units → `/etc/systemd/system/`
 3. Reloads systemd
 4. Enables the weekly timer (Sun 03:00 with 15min randomization)
 
@@ -55,25 +52,24 @@ git clone https://github.com/tolakang/netbird-autoupdate.git
 cd netbird-autoupdate
 ```
 
-#### 2. Run the installer
+#### 2. Create directories
 ```bash copy
-sudo ./scripts/deploy-all.sh
+sudo mkdir -p /opt/netbird/scripts /etc/systemd/system
 ```
 
-#### 3. Or install manually:
+#### 3. Copy files
 ```bash copy
-# Create directories
-sudo mkdir -p /opt/netbird/scripts /opt/netbird/systemd
-
-# Copy update script
+# Update script
 sudo cp scripts/update-netbird.sh /opt/netbird/scripts/update-netbird.sh
 sudo chmod +x /opt/netbird/scripts/update-netbird.sh
 
-# Copy systemd units
-sudo cp systemd/netbird-update.service /opt/netbird/systemd/
-sudo cp systemd/netbird-update.timer /opt/netbird/systemd/
+# Systemd units (must go to /etc/systemd/system/)
+sudo cp systemd/netbird-update.service /etc/systemd/system/
+sudo cp systemd/netbird-update.timer   /etc/systemd/system/
+```
 
-# Enable timer
+#### 4. Enable and start the timer
+```bash copy
 sudo systemctl daemon-reload
 sudo systemctl enable --now netbird-update.timer
 ```
@@ -110,14 +106,14 @@ Each backup is timestamped, only 30 newest items per type kept.
 ---
 
 ## Customisation
-- **Change NetBird directory** – edit `netbird-update.service`, add `Environment=COMPOSE_DIR=/new/path`  
-- **Adjust schedule** – modify `OnCalendar` in `netbird-update.timer` (e.g., `OnCalendar=Mon *-*-* 02:00`)  
-- **Retention count** – edit `tail -n +31` in script (`+31` → `+<N+1>` for different limit)
+- **Change NetBird directory** – edit `/etc/systemd/system/netbird-update.service`, add `Environment=COMPOSE_DIR=/new/path`
+- **Adjust schedule** – modify `OnCalendar` in `/etc/systemd/system/netbird-update.timer` (e.g., `OnCalendar=Mon *-*-* 02:00`)
+- **Retention count** – edit `tail -n +31` in `/opt/netbird/scripts/update-netbird.sh` (`+31` → `+<N+1>` for different limit)
 
 ---
 
 ## Security Hardening (systemd)
-- `ProtectSystem=full` – root filesystem read‑only for service  
+- `ProtectSystem=full` – root filesystem read-only for service  
 - `PrivateTmp=yes` – isolates `/tmp`  
 - `ReadWritePaths=/opt/netbird /opt/netbird/backups /run` – limited write permissions  
 - `Nice=10` – lowers CPU priority
