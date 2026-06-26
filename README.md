@@ -172,5 +172,45 @@ Each backup is timestamped, only 30 newest items per type kept.
 
 ---
 
+## 🗑️ Uninstall
+
+To remove the NetBird auto-update system completely:
+
+### One-command uninstall (auto-detects install directory):
+```bash copy
+sudo ./scripts/uninstall.sh
+```
+
+### With explicit path:
+```bash copy
+sudo ./scripts/uninstall.sh /srv/netbird
+```
+
+### Or using the saved config:
+```bash copy
+sudo ./scripts/uninstall.sh $(cat /etc/netbird-autoupdate.conf | cut -d'"' -f2)
+```
+
+### What gets removed:
+- ✅ `/etc/systemd/system/netbird-update.service` (systemd service)
+- ✅ `/etc/systemd/system/netbird-update.timer` (systemd timer)
+- ✅ `<INSTALL_DIR>/scripts/update-netbird.sh` (update script)
+- ✅ `/etc/netbird-autoupdate.conf` (saved install path)
+- ✅ `/run/netbird-update.lock` (lock file)
+- ✅ systemd daemon is reloaded to clear cached references
+
+### What is preserved:
+- ✅ **Backups** in `<INSTALL_DIR>/backups/`
+- ✅ **NetBird itself** (docker-compose.yml, config.yaml, etc.)
+- ✅ **Docker images** and containers (not touched)
+
+### To completely remove everything (including backups):
+```bash copy
+sudo ./scripts/uninstall.sh
+sudo rm -rf $(cat /etc/netbird-autoupdate.conf 2>/dev/null | cut -d'"' -f2)/backups/
+```
+
+---
+
 ## License
 MIT – see [LICENSE](https://github.com/tolakang/netbird-autoupdate/blob/main/LICENSE).
