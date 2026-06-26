@@ -248,9 +248,32 @@ clone_or_update_repo() {
 
 # Confirm action with user
 # Usage: confirm "message"
+#
+# Behavior:
+#   - If running interactively (stdin is a terminal): prompts the user
+#   - If running non-interactively (e.g., piped via curl | bash): skips confirmation
+#     and returns true (auto-yes), unless NONINTERACTIVE=1 is set, then returns false
+#
+# To force interactive mode even when piped, set NETBIRD_FORCE_INTERACTIVE=1
+# To force non-interactive abort, set NONINTERACTIVE=1
 confirm() {
     local message="${1:-Continue?}"
-    local response
-    read -rp "$message [y/N] " response
-    [[ "$response" =~ ^[Yy]$ ]]
+
+    # Check if stdin is a terminal
+    if [[ -t 0 ]] || [[ "${NETBIRD_FORCE_INTERACTIVE:-0}" == "1" ]]; then
+        # Interactive mode: prompt the user
+        local response
+        read -rp "$message [y/N] " response
+        [[ "$response" =~ ^[Yy]$ ]]
+    else
+        # Non-interactive mode (piped via curl | bash)
+        # Print the message to stderr so it's visible
+        echo "$message [auto-yes: piped/non-interactive mode]" >&2
+        # Allow override via env var
+        if [[ "${NONINTERACTIVE:-0}" == "1" ]]; then
+            echo "NONINTERACTIVE=1 set, aborting." >&2
+            return 1
+        fi
+        return 0  # Auto-yes when piped
+    fi
 }
