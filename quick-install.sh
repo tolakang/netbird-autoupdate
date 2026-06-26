@@ -17,6 +17,10 @@ echo "  NetBird Auto-Update Quick Installer"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
+# Fix git "dubious ownership" error by marking the directory as safe
+# This is needed when the repo was created by a different user (e.g., root via sudo)
+git config --global --add safe.directory "$REPO_DIR" 2>/dev/null || true
+
 # Clone or update the repository
 if [[ -d "$REPO_DIR/.git" ]]; then
     echo "📦 Repository exists at $REPO_DIR"
@@ -28,6 +32,8 @@ else
     sudo mkdir -p "$REPO_DIR"
     sudo chown "${SUDO_USER:-$USER}:${SUDO_USER:-$USER}" "$REPO_DIR" 2>/dev/null || true
     git clone "$REPO_URL" "$REPO_DIR"
+    # Mark as safe immediately after clone (in case it gets owned by another user later)
+    git config --global --add safe.directory "$REPO_DIR"
     cd "$REPO_DIR"
 fi
 
