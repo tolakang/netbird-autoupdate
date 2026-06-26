@@ -3,29 +3,31 @@ set -Eeuo pipefail
 
 ##############################################
 # NetBird Self-Hosted Auto Update
-# Version: 1.2
-# Path: /opt/netbird/scripts/update-netbird.sh
+# Version: 1.3
 ##############################################
 
 # Allow override via environment variable, default to standard /opt/netbird
-readonly COMPOSE_DIR="${COMPOSE_DIR:-/opt/netbird}"
-readonly COMPOSE_FILE="${COMPOSE_FILE:-${COMPOSE_DIR}/docker-compose.yml}"
-readonly BACKUP_DIR="${BACKUP_DIR:-${COMPOSE_DIR}/backups}"
+COMPOSE_DIR="${COMPOSE_DIR:-/opt/netbird}"
+COMPOSE_FILE="${COMPOSE_FILE:-${COMPOSE_DIR}/docker-compose.yml}"
+BACKUP_DIR="${BACKUP_DIR:-${COMPOSE_DIR}/backups}"
 
 # Services to update (override via SERVICES env var, space-separated)
 if [[ -n "${SERVICES:-}" ]]; then
-    # Split SERVICES env var into array
     IFS=' ' read -r -a SERVICES <<< "$SERVICES"
 else
-    readonly SERVICES=(netbird-server dashboard proxy)
+    SERVICES=(netbird-server dashboard proxy)
 fi
 
 # Configuration files to backup (override via BACKUP_FILES env var)
 if [[ -n "${BACKUP_FILES:-}" ]]; then
     IFS=' ' read -r -a BACKUP_FILES <<< "$BACKUP_FILES"
 else
-    readonly BACKUP_FILES=(docker-compose.yml config.yaml dashboard.env proxy.env)
+    BACKUP_FILES=(docker-compose.yml config.yaml dashboard.env proxy.env)
 fi
+
+# Make variables readonly after potential assignment
+readonly COMPOSE_DIR COMPOSE_FILE BACKUP_DIR SERVICES BACKUP_FILES BACKUP_RETENTION
+BACKUP_RETENTION="${BACKUP_RETENTION:-30}"
 
 # Validate compose file exists
 if [[ ! -f "$COMPOSE_FILE" ]]; then
@@ -54,6 +56,9 @@ flock -n 9 || {
 
 log "=================================================="
 log "Starting NetBird update process"
+log "  Install dir:   $COMPOSE_DIR"
+log "  Services:      ${SERVICES[*]}"
+log "  Retention:     $BACKUP_RETENTION backups"
 
 # Verify Docker is installed and running
 if ! command -v docker >/dev/null 2>&1; then
@@ -67,13 +72,14 @@ if ! docker info >/dev/null 2>&1; then
 fi
 
 # Current image IDs before pulling
+log "Checking current image versions..."
 OLD_IDS=()
 for svc in "${SERVICES[@]}"; do
     OLD_IDS+=("$(docker compose -f "$COMPOSE_FILE" images -q "$svc" 2>/dev/null || echo "")")
 done
 
 # Pull latest images for the defined services
-log "Checking for updates..."
+log "Pulling latest images..."
 docker compose -f "$COMPOSE_FILE" pull "${SERVICES[@]}"
 
 # Image IDs after pulling
@@ -84,9 +90,11 @@ done
 
 # Check if any image has changed
 UPDATED=false
+CHANGED_SERVICES=()
 for i in "${!SERVICES[@]}"; do
     if [[ "${OLD_IDS[$i]}" != "${NEW_IDS[$i]}" ]] && [[ -n "${NEW_IDS[$i]}" ]]; then
         UPDATED=true
+        CHANGED_SERVICES+=("${SERVICES[$i]}")
         log "New version detected for service: ${SERVICES[$i]}"
     fi
 done
@@ -96,7 +104,7 @@ if [[ "$UPDATED" != "true" ]]; then
     exit 0
 fi
 
-log "New images detected. Proceeding with update."
+log "New images detected for: ${CHANGED_SERVICES[*]}"
 
 # Stop netbird-server for consistent backup
 log "Stopping netbird-server for backup..."
@@ -116,14 +124,17 @@ for file in "${BACKUP_FILES[@]}"; do
         *)      dest="${BACKUP_DIR}/${file}-${BACKUP_TIMESTAMP}" ;;
     esac
 
-    sudo cp "$src" "$dest"
+    cp "$src" "$dest"
     log "Backed up ${file}"
 done
 
 # Backup management data directory
 log "Backing up management data..."
-docker compose -f "$COMPOSE_FILE" cp netbird-server:/var/lib/netbird/ "${BACKUP_DIR}/netbird-data-${BACKUP_TIMESTAMP}/" || true
-# If cp fails, we still continue; maybe data dir is empty or not present.
+if docker compose -f "$COMPOSE_FILE" cp netbird-server:/var/lib/netbird/ "${BACKUP_DIR}/netbird-data-${BACKUP_TIMESTAMP}/" 2>/dev/null; then
+    log "Management data backed up"
+else
+    log "Management data backup skipped (container may not be running or data not present)"
+fi
 
 # Start netbird-server again
 log "Starting netbird-server..."
@@ -132,35 +143,32 @@ docker compose -f "$COMPOSE_FILE" start netbird-server
 log "Configuration and data backups created."
 
 # Recreate only the services that have updated images
-# Using --force-recreate ensures that the new images are applied
-log "Recreating services with new images..."
-docker compose -f "$COMPOSE_FILE" up -d --force-recreate "${SERVICES[@]}"
+log "Recreating services with new images: ${CHANGED_SERVICES[*]}"
+docker compose -f "$COMPOSE_FILE" up -d --force-recreate "${CHANGED_SERVICES[@]}"
 
 # Clean up dangling images to save space
 log "Cleaning up dangling images..."
 docker image prune -f
 
-# Keep only the newest 30 backups for each file type and data backups
-log "Maintaining backup rotation (keeping newest 30)..."
+# Keep only the newest N backups for each file type and data backups
+log "Maintaining backup rotation (keeping newest $BACKUP_RETENTION)..."
 
-# Rotate config file backups (keep newest 30 per prefix)
+# Rotate config file backups (keep newest N per prefix)
 for prefix in docker-compose config dashboard proxy; do
-    # List all matching backup files sorted by modification time (newest first)
     mapfile -t backups < <(
         ls -1t "$BACKUP_DIR/$prefix-"*.yml \
               "$BACKUP_DIR/$prefix-"*.yaml \
               "$BACKUP_DIR/$prefix-"*.env 2>/dev/null
     )
-    # Remove all but the newest 30
-    if [[ ${#backups[@]} -gt 30 ]]; then
-        printf '%s\0' "${backups[@]:30}" | xargs -0 -r rm -f
+    if [[ ${#backups[@]} -gt $BACKUP_RETENTION ]]; then
+        printf '%s\0' "${backups[@]:$BACKUP_RETENTION}" | xargs -0 -r rm -f
     fi
 done
 
-# Rotate data backups (directories, keep newest 30)
+# Rotate data backups (directories, keep newest N)
 mapfile -t data_backups < <(ls -1dt "$BACKUP_DIR"/netbird-data-*/ 2>/dev/null)
-if [[ ${#data_backups[@]} -gt 30 ]]; then
-    printf '%s\0' "${data_backups[@]:30}" | xargs -0 -r rm -rf
+if [[ ${#data_backups[@]} -gt $BACKUP_RETENTION ]]; then
+    printf '%s\0' "${data_backups[@]:$BACKUP_RETENTION}" | xargs -0 -r rm -rf
 fi
 
 log "NetBird updated successfully."

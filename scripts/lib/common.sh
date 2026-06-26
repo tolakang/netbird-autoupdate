@@ -277,3 +277,18 @@ confirm() {
         return 0  # Auto-yes when piped
     fi
 }
+
+# Run a command and only show output on error
+# Usage: silent_run "description" command args...
+silent_run() {
+    local desc="$1"
+    shift
+    local output
+    if output=$("$@" 2>&1); then
+        return 0
+    else
+        echo "❌ Failed: $desc" >&2
+        echo "$output" >&2
+        return 1
+    fi
+}

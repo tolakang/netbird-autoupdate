@@ -7,7 +7,13 @@ Requires=docker.service
 [Service]
 Type=oneshot
 ExecStart=/opt/netbird/scripts/update-netbird.sh
+# Environment variables (can be customized):
+#   COMPOSE_DIR:    NetBird installation directory (default: /opt/netbird)
+#   SERVICES:       Space-separated list of services to update
+#   BACKUP_FILES:   Space-separated list of config files to backup
+#   BACKUP_RETENTION: Number of backups to keep (default: 30)
 Environment=COMPOSE_DIR=/opt/netbird
+Environment=BACKUP_RETENTION=30
 Nice=10
 IOSchedulingClass=best-effort
 PrivateTmp=yes

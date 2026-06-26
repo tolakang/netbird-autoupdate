@@ -23,6 +23,7 @@ After running the installer, files are placed in:
 ---
 
 ## Prerequisites
+
 - Ubuntu 20.04+ with `systemd`
 - Docker Engine **with** Compose v2 plugin (`docker compose`)
 - NetBird already installed via the official quick-start script
@@ -30,40 +31,43 @@ After running the installer, files are placed in:
 
 ---
 
-## Installation
+## 🚀 Installation
 
-### 🚀 One-Line Install (Easiest)
+### One-Line Install (Easiest)
 
 **Auto-detect install directory:**
-```bash copy
-curl -fsSL https://raw.githubusercontent.com/tolakang/netbird-autoupdate/main/quick-install.sh | sudo bash
+```bash
+curl -fsSL https://raw.githubusercontent.com/tolakang/netbird-autoupdate/main/quick-install.sh | sudo bash -s --
 ```
 
 **With explicit install path:**
-```bash copy
-curl -fsSL https://raw.githubusercontent.com/tolakang/netbird-autoupdate/main/quick-install.sh | sudo bash /srv/netbird
+```bash
+curl -fsSL https://raw.githubusercontent.com/tolakang/netbird-autoupdate/main/quick-install.sh | sudo bash -s -- /srv/netbird
 ```
 
+> **Note:** The `-s --` after `sudo bash` is important:
+> - `-s` tells bash to read the script from stdin (the piped curl output)
+> - `--` separates bash options from positional arguments
+> - Arguments after `--` are passed to the script (e.g., the install directory)
+
 This command:
-1. ✅ Clones repo to `/opt/netbird-autoupdate-repo` (or updates if exists)
+1. ✅ Clones repo to `/opt/netbird-autoupdate-repo` (always fresh - removes old if exists)
 2. ✅ Runs `deploy-all.sh` with auto-detection
 3. ✅ Works even if you've cloned the repo before (no "directory exists" error)
 
 ---
 
-### 🚀 Quick Deploy (Manual Clone)
+### Quick Deploy (Manual Clone)
 
 **Zero-config (auto-detects install directory):**
-```bash copy
+```bash
 git clone https://github.com/tolakang/netbird-autoupdate.git && cd netbird-autoupdate && sudo ./scripts/deploy-all.sh
 ```
 
-> **If you get "destination path already exists"**, either delete the directory first:
-> ```bash
-> rm -rf netbird-autoupdate
-> git clone https://github.com/tolakang/netbird-autoupdate.git && cd netbird-autoupdate && sudo ./scripts/deploy-all.sh
-> ```
-> Or use the one-line installer above which handles this automatically.
+**With custom path:**
+```bash
+sudo ./scripts/deploy-all.sh /srv/netbird
+```
 
 The installer will automatically search these locations:
 - `/opt/netbird` (default)
@@ -79,72 +83,33 @@ It validates the found directory contains a NetBird `docker-compose.yml` (checks
 
 ---
 
-### Manual Override
+### Manual Installation (Step-by-step)
 
-If auto-detection fails, or to specify a custom path:
+If you prefer full control:
 
-**With command argument:**
-```bash copy
-sudo ./scripts/deploy-all.sh /srv/netbird
-```
-
-**With environment variable:**
-```bash copy
-sudo INSTALL_DIR=/srv/netbird ./scripts/deploy-all.sh
-```
-
-**With persistent config file:**
-```bash copy
-echo 'INSTALL_DIR=/srv/netbird' | sudo tee /etc/netbird-autoupdate.conf
-sudo ./scripts/deploy-all.sh
-```
-
-This command:
-1. **Auto-detects** (or uses specified) install directory
-2. **Validates** the directory contains a valid NetBird `docker-compose.yml`
-3. **Copies** `update-netbird.sh` → `<INSTALL_DIR>/scripts/update-netbird.sh`
-4. **Copies** systemd units → `/etc/systemd/system/` (paths auto-patched)
-5. **Reloads** systemd
-6. **Enables** the weekly timer (Sun 03:00 with 15min randomization)
-7. **Saves** the path to `/etc/netbird-autoupdate.conf` for future runs
-
----
-
-### Manual Installation (Alternative)
-
-If you prefer step-by-step or want full control:
-
-#### 1. Clone repository
-```bash copy
+```bash
+# 1. Clone repository
 git clone https://github.com/tolakang/netbird-autoupdate.git
 cd netbird-autoupdate
-```
 
-#### 2. Run installer with custom path:
-```bash copy
-sudo ./scripts/deploy-all.sh /your/netbird/path
-```
-
-#### 3. Or manually copy files:
-```bash copy
-# Set your NetBird directory
+# 2. Set your NetBird directory
 export NB_DIR=/opt/netbird   # change if different
 
-# Create directories
+# 3. Create directories
 sudo mkdir -p "$NB_DIR/scripts" /etc/systemd/system
 
-# Copy update script
+# 4. Copy update script
 sudo cp scripts/update-netbird.sh "$NB_DIR/scripts/update-netbird.sh"
 sudo chmod +x "$NB_DIR/scripts/update-netbird.sh"
 
-# Copy systemd units
+# 5. Copy systemd units
 sudo cp systemd/netbird-update.service /etc/systemd/system/
 sudo cp systemd/netbird-update.timer   /etc/systemd/system/
 
-# Patch paths in service file to match your NB_DIR
+# 6. Patch paths in service file to match your NB_DIR
 sudo sed -i "s|/opt/netbird|$NB_DIR|g" /etc/systemd/system/netbird-update.service
 
-# Enable timer
+# 7. Enable timer
 sudo systemctl daemon-reload
 sudo systemctl enable --now netbird-update.timer
 ```
@@ -152,88 +117,112 @@ sudo systemctl enable --now netbird-update.timer
 ---
 
 ## How It Works
+
 1. **Locking** – `flock` prevents overlapping runs (`/run/netbird-update.lock`).  
 2. **Image check** – Pulls latest images, compares IDs, only proceeds if changed.  
 3. **Consistent backup** – Stops `netbird-server`, copies **configuration files** *and* **management data directory**, restarts service.  
 4. **Selective recreation** – Recreates only services with new images via `docker compose up -d --force-recreate`.  
-5. **Cleanup** – Prunes dangling Docker images, retains **newest 30** backups per type.  
+5. **Cleanup** – Prunes dangling Docker images, retains **newest N** backups per type.  
 6. **Logging** – All output to `journalctl` under `netbird-update.service`.
 
 ---
 
 ## What Gets Backed Up?
+
 | Type | Files / Directories | Example Backup Filenames |
 |------|----------------------|--------------------------|
 | Configuration | `docker-compose.yml`, `config.yaml`, `dashboard.env`, `proxy.env` | `docker-compose.yml-20231103-152400.yml`, `config.yaml-20231103-152400.yaml` |
 | Management data | Entire `/var/lib/netbird/` volume from `netbird-server` container | `netbird-data-20231103-152400/` (directory) |
 
-Each backup is timestamped, only 30 newest items per type kept.
+Each backup is timestamped, only 30 newest items per type kept (configurable via `BACKUP_RETENTION`).
 
 ---
 
 ## Monitoring & Manual Controls
+
 | Action | Command |
 |--------|---------|
 | View next scheduled run | `systemctl list-timers netbird-update.timer` |
 | Run update immediately (for testing) | `sudo systemctl start netbird-update.service` |
 | View recent logs | `journalctl -u netbird-update.service -n 100 --no-pager` |
 | View saved install path | `cat /etc/netbird-autoupdate.conf` |
-| Re-run with saved path | `sudo ./scripts/deploy-all.sh` |
+| Re-run with saved path | `sudo /opt/netbird-autoupdate-repo/scripts/deploy-all.sh` |
 
 ---
 
 ## Customisation
-- **Change NetBird directory** – run `./scripts/deploy-all.sh /new/path` or edit `/etc/netbird-autoupdate.conf`
-- **Adjust schedule** – modify `OnCalendar` in `/etc/systemd/system/netbird-update.timer` (e.g., `OnCalendar=Mon *-*-* 02:00`)
-- **Retention count** – edit `tail -n +31` in the update script (`+31` → `+<N+1>` for different limit)
-- **Custom services list** – set `SERVICES="svc1 svc2"` environment variable before running
+
+All customizations are done via environment variables in the systemd service:
+
+```bash
+sudo systemctl edit netbird-update.service
+```
+
+Add (or modify) the `Environment=` lines:
+```ini
+[Service]
+Environment=COMPOSE_DIR=/srv/netbird
+Environment=SERVICES="netbird-server dashboard proxy"
+Environment=BACKUP_FILES="docker-compose.yml config.yaml dashboard.env proxy.env"
+Environment=BACKUP_RETENTION=30
+```
+
+Then reload:
+```bash
+sudo systemctl daemon-reload
+```
 
 ---
 
 ## Security Hardening (systemd)
+
 - `ProtectSystem=full` – root filesystem read-only for service  
 - `PrivateTmp=yes` – isolates `/tmp`  
 - `ReadWritePaths=<INSTALL_DIR> <INSTALL_DIR>/backups /run` – limited write permissions  
-- `Nice=10` – lowers CPU priority
+- `Nice=10` – lowers CPU priority  
+- `IOSchedulingClass=best-effort` – reduces I/O contention
 
 ---
 
 ## 🗑️ Uninstall
 
-To remove the NetBird auto-update system completely:
-
 ### One-Line Uninstall (Easiest)
-```bash copy
-curl -fsSL https://raw.githubusercontent.com/tolakang/netbird-autoupdate/main/quick-uninstall.sh | sudo bash
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/tolakang/netbird-autoupdate/main/quick-uninstall.sh | sudo bash -s --
 ```
 
-### With explicit install path:
-```bash copy
-curl -fsSL https://raw.githubusercontent.com/tolakang/netbird-autoupdate/main/quick-uninstall.sh | sudo bash /srv/netbird
+**With explicit install path:**
+```bash
+curl -fsSL https://raw.githubusercontent.com/tolakang/netbird-autoupdate/main/quick-uninstall.sh | sudo bash -s -- /srv/netbird
 ```
 
-### Or if repo is cloned locally:
-```bash copy
-cd /opt/netbird-autoupdate-repo
-sudo ./scripts/uninstall.sh
-```
+> **Note:** Use `sudo bash -s --` (not just `sudo bash`) so arguments are passed correctly to the script.
 
-### Or with auto-detect from repo dir:
-```bash copy
+### Manual Uninstall
+
+```bash
 sudo /opt/netbird-autoupdate-repo/scripts/uninstall.sh
+# or with path:
+sudo /opt/netbird-autoupdate-repo/scripts/uninstall.sh /srv/netbird
 ```
 
-### With explicit path:
-```bash copy
-sudo ./scripts/uninstall.sh /srv/netbird
+### Force Interactive Mode
+
+If piped via curl, the script auto-proceeds. To force an interactive confirmation:
+
+```bash
+NETBIRD_FORCE_INTERACTIVE=1 curl -fsSL https://raw.githubusercontent.com/tolakang/netbird-autoupdate/main/quick-uninstall.sh | sudo bash -s --
 ```
 
-### Or using the saved config:
-```bash copy
-sudo ./scripts/uninstall.sh $(cat /etc/netbird-autoupdate.conf | cut -d'"' -f2)
+### Force Abort (Non-Interactive)
+
+```bash
+NONINTERACTIVE=1 curl -fsSL https://raw.githubusercontent.com/tolakang/netbird-autoupdate/main/quick-uninstall.sh | sudo bash -s --
 ```
 
 ### What gets removed:
+
 - ✅ `/etc/systemd/system/netbird-update.service` (systemd service)
 - ✅ `/etc/systemd/system/netbird-update.timer` (systemd timer)
 - ✅ `<INSTALL_DIR>/scripts/update-netbird.sh` (update script)
@@ -242,17 +231,66 @@ sudo ./scripts/uninstall.sh $(cat /etc/netbird-autoupdate.conf | cut -d'"' -f2)
 - ✅ systemd daemon is reloaded to clear cached references
 
 ### What is preserved:
+
 - ✅ **Backups** in `<INSTALL_DIR>/backups/`
 - ✅ **NetBird itself** (docker-compose.yml, config.yaml, etc.)
 - ✅ **Docker images** and containers (not touched)
 
 ### To completely remove everything (including backups):
-```bash copy
-sudo ./scripts/uninstall.sh
-sudo rm -rf $(cat /etc/netbird-autoupdate.conf 2>/dev/null | cut -d'"' -f2)/backups/
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/tolakang/netbird-autoupdate/main/quick-uninstall.sh | sudo bash
+sudo rm -rf /opt/netbird/backups/   # adjust to your install dir
+```
+
+---
+
+## 🛠️ Troubleshooting
+
+### "dubious ownership" error
+
+Already handled in quick-install.sh. If you encounter this manually:
+```bash
+git config --global --add safe.directory /path/to/repo
+```
+
+### Update script not found after install
+
+The systemd service expects the script at the configured `INSTALL_DIR/scripts/update-netbird.sh`. Check:
+```bash
+cat /etc/netbird-autoupdate.conf
+sudo systemctl show netbird-update.service | grep ExecStart
+```
+
+### Check logs
+
+```bash
+sudo journalctl -u netbird-update.service -n 50 --no-pager
+```
+
+---
+
+## 📂 Repository Structure
+
+```
+netbird-autoupdate/
+├── quick-install.sh        # One-line installer (curl-pipable)
+├── quick-uninstall.sh      # One-line uninstaller (curl-pipable)
+├── README.md
+├── .gitignore
+├── scripts/
+│   ├── deploy-all.sh       # Main deployment script
+│   ├── uninstall.sh        # Self-contained uninstaller
+│   ├── update-netbird.sh   # Main update logic (runs weekly)
+│   └── lib/
+│       └── common.sh       # Shared library functions
+└── systemd/
+    ├── netbird-update.service
+    └── netbird-update.timer
 ```
 
 ---
 
 ## License
+
 MIT – see [LICENSE](https://github.com/tolakang/netbird-autoupdate/blob/main/LICENSE).

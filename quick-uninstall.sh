@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 
 # Quick uninstaller: removes NetBird auto-update completely
-# Usage: curl -fsSL https://raw.githubusercontent.com/tolakang/netbird-autoupdate/main/quick-uninstall.sh | sudo bash [INSTALL_DIR]
+# Usage: curl -fsSL https://raw.githubusercontent.com/tolakang/netbird-autoupdate/main/quick-uninstall.sh | sudo bash -s -- [INSTALL_DIR]
 #
-# Self-contained script for piping via curl. Tries to use the local repo's
-# uninstall.sh first; falls back to downloading from GitHub.
+# Self-contained script for piping via curl. Uses the local repo's uninstall.sh
+# if available; falls back to downloading from GitHub.
 
 set -uo pipefail
 
@@ -16,7 +16,7 @@ echo "  NetBird Auto-Update Quick Uninstaller"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
-# If repo exists locally, use its uninstall.sh
+# If repo exists locally, use its uninstall.sh (it can find common.sh via lib/)
 if [[ -f "$REPO_DIR/scripts/uninstall.sh" ]]; then
     echo "ℹ️  Using uninstall script from: $REPO_DIR"
     echo ""
@@ -26,7 +26,7 @@ if [[ -f "$REPO_DIR/scripts/uninstall.sh" ]]; then
         sudo bash "$REPO_DIR/scripts/uninstall.sh"
     fi
 else
-    # Fallback: download uninstall.sh directly and run it
+    # Fallback: download uninstall.sh directly (it's self-contained)
     echo "⚠️  Local repo not found at $REPO_DIR"
     echo "ℹ️  Downloading uninstall script from GitHub..."
 
