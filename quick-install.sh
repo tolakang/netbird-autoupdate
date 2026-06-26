@@ -17,23 +17,43 @@ echo "  NetBird Auto-Update Quick Installer"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
-# Fix git "dubious ownership" error by marking the directory as safe
-# This is needed when the repo was created by a different user (e.g., root via sudo)
+# Fix git "dubious ownership" error - multiple approaches for robustness:
+# 1. Set safe.directory in current user's config
+# 2. Set safe.directory in root's config (when run via sudo)
+# 3. Set safe.directory in the actual invoking user's config (when run via sudo)
+# 4. Use git -c safe.directory on the pull command itself as a fallback
+
+# Approach 1: Current user (typically root when using sudo)
 git config --global --add safe.directory "$REPO_DIR" 2>/dev/null || true
+
+# Approach 2: Set as root explicitly
+if [[ -d /root ]]; then
+    sudo git config --global --add safe.directory "$REPO_DIR" 2>/dev/null || true
+fi
+
+# Approach 3: Set as the actual user (when invoked via sudo)
+if [[ -n "${SUDO_USER:-}" ]] && [[ "$SUDO_USER" != "root" ]]; then
+    REAL_USER="$SUDO_USER"
+    REAL_HOME=$(getent passwd "$REAL_USER" | cut -d: -f6)
+    if [[ -n "$REAL_HOME" ]] && [[ -d "$REAL_HOME" ]]; then
+        sudo -u "$REAL_USER" git config --global --add safe.directory "$REPO_DIR" 2>/dev/null || true
+    fi
+fi
 
 # Clone or update the repository
 if [[ -d "$REPO_DIR/.git" ]]; then
     echo "📦 Repository exists at $REPO_DIR"
     echo "   Pulling latest changes..."
     cd "$REPO_DIR"
-    sudo git pull origin main
+    # Approach 4: Use git -c to override safe.directory on this specific command
+    sudo git -c safe.directory="$REPO_DIR" -c safe.directory='*' pull origin main
 else
     echo "📦 Cloning repository to $REPO_DIR..."
     sudo mkdir -p "$REPO_DIR"
     sudo chown "${SUDO_USER:-$USER}:${SUDO_USER:-$USER}" "$REPO_DIR" 2>/dev/null || true
-    git clone "$REPO_URL" "$REPO_DIR"
-    # Mark as safe immediately after clone (in case it gets owned by another user later)
-    git config --global --add safe.directory "$REPO_DIR"
+    git -c safe.directory='*' clone "$REPO_URL" "$REPO_DIR"
+    # Mark as safe immediately after clone
+    git config --global --add safe.directory "$REPO_DIR" 2>/dev/null || true
     cd "$REPO_DIR"
 fi
 

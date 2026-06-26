@@ -13,8 +13,13 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
-# Fix git "dubious ownership" error for git operations within this script
+# Fix git "dubious ownership" error - robust multi-user approach
+# Set safe.directory for root and the actual invoking user
 git config --global --add safe.directory "$REPO_ROOT" 2>/dev/null || true
+sudo git config --global --add safe.directory "$REPO_ROOT" 2>/dev/null || true
+if [[ -n "${SUDO_USER:-}" ]] && [[ "$SUDO_USER" != "root" ]]; then
+    sudo -u "$SUDO_USER" git config --global --add safe.directory "$REPO_ROOT" 2>/dev/null || true
+fi
 
 echo "Deploying NetBird auto-update system from: $REPO_ROOT"
 
