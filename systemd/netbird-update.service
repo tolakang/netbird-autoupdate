@@ -15,3 +15,6 @@ ProtectHome=read-only
 ReadWritePaths=/opt/netbird /opt/netbird/backups /run
 User=root
 Group=root
+
+[Install]
+WantedBy=timers.target

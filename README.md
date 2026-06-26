@@ -1,6 +1,6 @@
 # NetBird Self‑Hosted Automatic Update
 
-A production‑ready solution to keep a NetBird self‑hosted installation on Ubuntu up‑to‑date **without unnecessary container recreation**, using **systemd timers** (no cron) and **automatic backups**.
+A production‑ready solution to keep a NetBird self‑hosted installation on Ubuntu up‑to‑date **without unnecessary container recreation**, using **systemd timers** (no cron) and **automatic verified backups**.
 
 ---
 
@@ -14,6 +14,7 @@ A production‑ready solution to keep a NetBird self‑hosted installation on Ub
 │  └─ netbird-update.timer      # weekly timer (Sun 03:00)
 └─ backups/                      # Timestamped backups (auto‑managed)
 ```
+
 ---
 
 ## Prerequisites
@@ -54,12 +55,22 @@ sudo systemctl enable --now netbird-update.timer
 ---
 
 ## How It Works
-1. **Locking** – `flock` prevents overlapping runs (`/run/netbird-update.lock`).
-2. **Image check** – Pulls the latest images, compares image IDs, and only proceeds if any changed.
-3. **Backup** – Copies `docker-compose.yml`, `config.yaml`, `dashboard.env`, and `proxy.env` to `/opt/netbird/backups` with a timestamp.
-4. **Selective recreation** – Recreates **only** the services with new images using `docker compose up -d --force-recreate`.
-5. **Cleanup** – Prunes dangling Docker images and retains the **newest 30** backups per file type.
+1. **Locking** – `flock` prevents overlapping runs (`/run/netbird-update.lock`).  
+2. **Image check** – Pulls the latest images, compares IDs, and only proceeds if any changed.  
+3. **Consistent backup** – Stops `netbird-server`, copies **configuration files** *and* the **management data directory**, then restarts the service.  
+4. **Selective recreation** – Recreates only the services with new images using `docker compose up -d --force-recreate`.  
+5. **Cleanup** – Prunes dangling Docker images and retains the **newest 30** backups per file type and data directory.  
 6. **Logging** – All output goes to `journalctl` under the unit `netbird-update.service`.
+
+---
+
+## What Gets Backed Up?
+| Type | Files / Directories | Example Backup Filenames |
+|------|----------------------|--------------------------|
+| Configuration | `docker-compose.yml`, `config.yaml`, `dashboard.env`, `proxy.env` | `docker-compose.yml-20231103-152400.yml`, `config.yaml-20231103-152400.yaml` |
+| Management data | Entire `/var/lib/netbird/` volume from the `netbird-server` container | `netbird-data-20231103-152400/` (directory) |
+
+Each backup is timestamped, and only the 30 newest items per type are kept.
 
 ---
 
@@ -73,16 +84,16 @@ sudo systemctl enable --now netbird-update.timer
 ---
 
 ## Customisation
-- **Change the NetBird directory** – edit `netbird-update.service` and add an environment line: `Environment="COMPOSE_DIR=/custom/path"`.
-- **Adjust schedule** – modify `OnCalendar` in `netbird-update.timer` (e.g., `OnCalendar=Mon *-*-* 02:00`).
-- **Retention count** – edit the `for`‑loop in `update-netbird.sh` (`tail -n +31` → `tail -n +<N+1>` for a different number of backups).
+- **Change the NetBird directory** – edit `netbird-update.service` and add an `Environment=` line pointing to the new path.  
+- **Adjust schedule** – modify `OnCalendar` in `netbird-update.timer` (e.g., `OnCalendar=Mon *-*-* 02:00`).  
+- **Retention count** – edit the `tail -n +31` numbers in the script (`+31` → `+<N+1>` for a different roll‑back limit).  
 
 ---
 
 ## Security Hardening (systemd)
-- `ProtectSystem=full` – makes the OS read‑only for the service.
-- `PrivateTmp=yes` – isolates `/tmp`.
-- `ReadWritePaths` – limits write permissions to `/opt/netbird`, its backup folder, and `/run` (for the lock file).
+- `ProtectSystem=full` – makes the root filesystem read‑only for the service.  
+- `PrivateTmp=yes` – isolates `/tmp`.  
+- `ReadWritePaths=/opt/netbird /opt/netbird/backups /run` – limits write permissions to the essential directories.  
 - `Nice=10` – lowers CPU priority.
 
 ---

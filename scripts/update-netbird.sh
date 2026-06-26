@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 ##############################################
 # NetBird Self-Hosted Auto Update
-# Version: 1.1
+# Version: 1.2
 # Path: /opt/netbird/scripts/update-netbird.sh
 ##############################################
 
@@ -77,7 +77,11 @@ fi
 
 log "New images detected. Proceeding with update."
 
-# Backup configuration files before updating
+# Stop netbird-server for consistent backup
+log "Stopping netbird-server for backup..."
+docker compose -f "$COMPOSE_FILE" stop netbird-server
+
+# Backup configuration files
 BACKUP_TIMESTAMP=$(date +%Y%m%d-%H%M%S)
 for file in "${BACKUP_FILES[@]}"; do
     if [[ -f "${COMPOSE_DIR}/${file}" ]]; then
@@ -89,22 +93,34 @@ for file in "${BACKUP_FILES[@]}"; do
     fi
 done
 
-log "Configuration backups created."
+# Backup management data directory
+log "Backing up management data..."
+docker compose -f "$COMPOSE_FILE" cp netbird-server:/var/lib/netbird/ "${BACKUP_DIR}/netbird-data-${BACKUP_TIMESTAMP}/" || true
+# If cp fails, we still continue; maybe data dir is empty or not present.
+
+# Start netbird-server again
+log "Starting netbird-server..."
+docker compose -f "$COMPOSE_FILE" start netbird-server
+
+log "Configuration and data backups created."
 
 # Recreate only the services that have updated images
 # Using --force-recreate ensures that the new images are applied
+log "Recreating services with new images..."
 docker compose -f "$COMPOSE_FILE" up -d --force-recreate "${SERVICES[@]}"
 
 # Clean up dangling images to save space
 log "Cleaning up dangling images..."
 docker image prune -f
 
-# Keep only the newest 30 backups for each file type
+# Keep only the newest 30 backups for each file type and data backups
 log "Maintaining backup rotation (keeping newest 30)..."
+# Config file backups
 for prefix in "docker-compose" "config" "dashboard" "proxy"; do
-    # Find all backups for this prefix, sort by time, and remove oldest if > 30
     ls -1t "${BACKUP_DIR}/${prefix}-"*.yml "${BACKUP_DIR}/${prefix}-"*.yaml "${BACKUP_DIR}/${prefix}-"*.env 2>/dev/null | tail -n +31 | xargs -r rm -f
 done
+# Data backups (directories)
+ls -1dt "${BACKUP_DIR}/netbird-data-"*/ 2>/dev/null | tail -n +31 | xargs -r rm -rf
 
 log "NetBird updated successfully."
 log "Finished."
