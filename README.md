@@ -239,8 +239,18 @@ NONINTERACTIVE=1 curl -fsSL https://raw.githubusercontent.com/tolakang/netbird-a
 ### To completely remove everything (including backups):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/tolakang/netbird-autoupdate/main/quick-uninstall.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/tolakang/netbird-autoupdate/main/quick-uninstall.sh | sudo bash -s --
 sudo rm -rf /opt/netbird/backups/   # adjust to your install dir
+```
+
+### To reinstall after uninstall:
+
+```bash
+# Option 1: One-line installer (always fresh)
+curl -fsSL https://raw.githubusercontent.com/tolakang/netbird-autoupdate/main/quick-install.sh | sudo bash -s -- /opt/netbird
+
+# Option 2: From the local repo (if /opt/netbird-autoupdate-repo still exists)
+sudo /opt/netbird-autoupdate-repo/scripts/deploy-all.sh /opt/netbird
 ```
 
 ---

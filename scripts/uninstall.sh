@@ -12,6 +12,8 @@
 set -uo pipefail
 
 # Configuration (embedded for self-contained execution)
+NETBIRD_AUTOUPDATE_REPO_URL="https://github.com/tolakang/netbird-autoupdate.git"
+NETBIRD_AUTOUPDATE_REPO_DIR="/opt/netbird-autoupdate-repo"
 NETBIRD_AUTOUPDATE_CONF="/etc/netbird-autoupdate.conf"
 NETBIRD_DEFAULT_PATHS=(
     "/opt/netbird"
@@ -185,5 +187,13 @@ echo ""
 echo "To completely remove backups too (optional):"
 echo "  sudo rm -rf $INSTALL_DIR/backups/"
 echo ""
-echo "To reinstall, run:"
-echo "  sudo ./scripts/deploy-all.sh"
+echo "To reinstall, use ONE of these commands:"
+echo ""
+echo "  Option 1 (one-line, recommended):"
+echo "    curl -fsSL https://raw.githubusercontent.com/tolakang/netbird-autoupdate/main/quick-install.sh | sudo bash -s -- $INSTALL_DIR"
+echo ""
+echo "  Option 2 (if /opt/netbird-autoupdate-repo still exists):"
+echo "    sudo $NETBIRD_AUTOUPDATE_REPO_DIR/scripts/deploy-all.sh $INSTALL_DIR"
+echo ""
+echo "  Option 3 (manual, from cloned repo):"
+echo "    cd /opt/netbird-autoupdate-repo && sudo ./scripts/deploy-all.sh $INSTALL_DIR"
