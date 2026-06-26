@@ -8,7 +8,8 @@ A production‑ready solution to keep a NetBird self‑hosted installation on Ub
 ```
 /opt/netbird/
 ├─ scripts/
-│  └─ update-netbird.sh          # Main update script (see below)
+│  ├─ update-netbird.sh          # Main update script (see below)
+│  └─ deploy-all.sh              # One-line installer for systemd units and timer
 ├─ systemd/
 │  ├─ netbird-update.service    # systemd service definition
 │  └─ netbird-update.timer      # weekly timer (Sun 03:00)
@@ -27,7 +28,19 @@ A production‑ready solution to keep a NetBird self‑hosted installation on Ub
 ## Installation
 All commands below include a **Copy** button for easy pasting into your terminal.
 
-### 1. Deploy the update script
+### Quick Deploy (Recommended)
+Deploy everything in one step using the provided installer script:
+```bash copy
+sudo /opt/netbird/scripts/deploy-all.sh
+```
+*This script copies the systemd unit files to `/opt/netbird/systemd/`, reloads systemd, and enables the weekly timer.*
+
+---
+
+### Manual Installation (Alternative)
+If you prefer to run each step manually:
+
+#### 1. Deploy the update script
 ```bash copy
 sudo mkdir -p /opt/netbird/scripts
 sudo curl -fsSL https://raw.githubusercontent.com/tolakang/netbird-autoupdate/main/scripts/update-netbird.sh \
@@ -35,18 +48,18 @@ sudo curl -fsSL https://raw.githubusercontent.com/tolakang/netbird-autoupdate/ma
 sudo chmod +x /opt/netbird/scripts/update-netbird.sh
 ```
 
-### 2. Install the systemd service
+#### 2. Install the systemd service
 ```bash copy
 sudo mkdir -p /etc/systemd/system
 sudo cp /opt/netbird/systemd/netbird-update.service /etc/systemd/system/
 ```
 
-### 3. Install the systemd timer
+#### 3. Install the systemd timer
 ```bash copy
 sudo cp /opt/netbird/systemd/netbird-update.timer /etc/systemd/system/
 ```
 
-### 4. Enable and start the timer
+#### 4. Enable and start the timer
 ```bash copy
 sudo systemctl daemon-reload
 sudo systemctl enable --now netbird-update.timer
