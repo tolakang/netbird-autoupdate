@@ -2,15 +2,15 @@
 
 # Quick uninstaller: removes NetBird auto-update completely
 # Usage: curl -fsSL https://raw.githubusercontent.com/tolakang/netbird-autoupdate/main/quick-uninstall.sh | sudo bash [INSTALL_DIR]
+#
+# Self-contained script for piping via curl. Tries to use the local repo's
+# uninstall.sh first; falls back to downloading from GitHub.
 
 set -uo pipefail
 
-# Get the directory of this script
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-
-# Source the shared library
-# shellcheck disable=SC1091
-source "$SCRIPT_DIR/scripts/lib/common.sh"
+REPO_URL="https://github.com/tolakang/netbird-autoupdate.git"
+REPO_DIR="/opt/netbird-autoupdate-repo"
+RAW_URL="https://raw.githubusercontent.com/tolakang/netbird-autoupdate/main"
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "  NetBird Auto-Update Quick Uninstaller"
@@ -18,31 +18,31 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo ""
 
 # If repo exists locally, use its uninstall.sh
-if [[ -f "$NETBIRD_AUTOUPDATE_REPO_DIR/scripts/uninstall.sh" ]]; then
-    log_info "Using uninstall script from: $NETBIRD_AUTOUPDATE_REPO_DIR"
+if [[ -f "$REPO_DIR/scripts/uninstall.sh" ]]; then
+    echo "ℹ️  Using uninstall script from: $REPO_DIR"
     echo ""
     if [[ $# -gt 0 ]]; then
-        sudo bash "$NETBIRD_AUTOUPDATE_REPO_DIR/scripts/uninstall.sh" "$@"
+        sudo bash "$REPO_DIR/scripts/uninstall.sh" "$@"
     else
-        sudo bash "$NETBIRD_AUTOUPDATE_REPO_DIR/scripts/uninstall.sh"
+        sudo bash "$REPO_DIR/scripts/uninstall.sh"
     fi
 else
-    # Fallback: download and run uninstall.sh
-    log_warn "Local repo not found at $NETBIRD_AUTOUPDATE_REPO_DIR"
-    log_info "Downloading uninstall script from GitHub..."
+    # Fallback: download uninstall.sh directly and run it
+    echo "⚠️  Local repo not found at $REPO_DIR"
+    echo "ℹ️  Downloading uninstall script from GitHub..."
 
-    local_temp_script=$(mktemp)
-    if curl -fsSL "${NETBIRD_AUTOUPDATE_REPO_URL/raw/main/scripts/uninstall.sh}" -o "$local_temp_script" 2>/dev/null; then
-        chmod +x "$local_temp_script"
+    TEMP_SCRIPT=$(mktemp)
+    if curl -fsSL "$RAW_URL/scripts/uninstall.sh" -o "$TEMP_SCRIPT" 2>/dev/null; then
+        chmod +x "$TEMP_SCRIPT"
         if [[ $# -gt 0 ]]; then
-            sudo bash "$local_temp_script" "$@"
+            sudo bash "$TEMP_SCRIPT" "$@"
         else
-            sudo bash "$local_temp_script"
+            sudo bash "$TEMP_SCRIPT"
         fi
-        rm -f "$local_temp_script"
+        rm -f "$TEMP_SCRIPT"
     else
-        log_error "Failed to download uninstall script."
-        echo "Please clone the repo manually and run: sudo ./scripts/uninstall.sh"
+        echo "❌ Failed to download uninstall script."
+        echo "   Please clone the repo manually and run: sudo ./scripts/uninstall.sh"
         exit 1
     fi
 fi
