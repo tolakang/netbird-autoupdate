@@ -11,8 +11,21 @@ set -Eeuo pipefail
 readonly COMPOSE_DIR="${COMPOSE_DIR:-/opt/netbird}"
 readonly COMPOSE_FILE="${COMPOSE_FILE:-${COMPOSE_DIR}/docker-compose.yml}"
 readonly BACKUP_DIR="${BACKUP_DIR:-${COMPOSE_DIR}/backups}"
-readonly SERVICES=(${SERVICES[@]:-netbird-server dashboard proxy})
-readonly BACKUP_FILES=(${BACKUP_FILES[@]:-docker-compose.yml config.yaml dashboard.env proxy.env})
+
+# Services to update (override via SERVICES env var, space-separated)
+if [[ -n "${SERVICES:-}" ]]; then
+    # Split SERVICES env var into array
+    IFS=' ' read -r -a SERVICES <<< "$SERVICES"
+else
+    readonly SERVICES=(netbird-server dashboard proxy)
+fi
+
+# Configuration files to backup (override via BACKUP_FILES env var)
+if [[ -n "${BACKUP_FILES:-}" ]]; then
+    IFS=' ' read -r -a BACKUP_FILES <<< "$BACKUP_FILES"
+else
+    readonly BACKUP_FILES=(docker-compose.yml config.yaml dashboard.env proxy.env)
+fi
 
 # Validate compose file exists
 if [[ ! -f "$COMPOSE_FILE" ]]; then
@@ -92,13 +105,19 @@ docker compose -f "$COMPOSE_FILE" stop netbird-server
 # Backup configuration files
 BACKUP_TIMESTAMP=$(date +%Y%m%d-%H%M%S)
 for file in "${BACKUP_FILES[@]}"; do
-    if [[ -f "${COMPOSE_DIR}/${file}" ]]; then
-        # Use a safe filename for the backup
-        cp "${COMPOSE_DIR}/${file}" "${BACKUP_DIR}/${file%.yml}-${BACKUP_TIMESTAMP}.yml" 2>/dev/null \
-            || cp "${COMPOSE_DIR}/${file}" "${BACKUP_DIR}/${file%.yaml}-${BACKUP_TIMESTAMP}.yaml" 2>/dev/null \
-            || cp "${COMPOSE_DIR}/${file}" "${BACKUP_DIR}/${file}-${BACKUP_TIMESTAMP}"
-        log "Backed up ${file}"
-    fi
+    src="${COMPOSE_DIR}/${file}"
+    [[ -f "$src" ]] || continue
+
+    # Generate a backup filename preserving the extension
+    case "$file" in
+        *.yml)  dest="${BACKUP_DIR}/${file%.yml}-${BACKUP_TIMESTAMP}.yml" ;;
+        *.yaml) dest="${BACKUP_DIR}/${file%.yaml}-${BACKUP_TIMESTAMP}.yaml" ;;
+        *.env)  dest="${BACKUP_DIR}/${file}-${BACKUP_TIMESTAMP}.env" ;;
+        *)      dest="${BACKUP_DIR}/${file}-${BACKUP_TIMESTAMP}" ;;
+    esac
+
+    sudo cp "$src" "$dest"
+    log "Backed up ${file}"
 done
 
 # Backup management data directory
@@ -123,12 +142,26 @@ docker image prune -f
 
 # Keep only the newest 30 backups for each file type and data backups
 log "Maintaining backup rotation (keeping newest 30)..."
-# Config file backups
-for prefix in "docker-compose" "config" "dashboard" "proxy"; do
-    ls -1t "${BACKUP_DIR}/${prefix}-"*.yml "${BACKUP_DIR}/${prefix}-"*.yaml "${BACKUP_DIR}/${prefix}-"*.env 2>/dev/null | tail -n +31 | xargs -r rm -f
+
+# Rotate config file backups (keep newest 30 per prefix)
+for prefix in docker-compose config dashboard proxy; do
+    # List all matching backup files sorted by modification time (newest first)
+    mapfile -t backups < <(
+        ls -1t "$BACKUP_DIR/$prefix-"*.yml \
+              "$BACKUP_DIR/$prefix-"*.yaml \
+              "$BACKUP_DIR/$prefix-"*.env 2>/dev/null
+    )
+    # Remove all but the newest 30
+    if [[ ${#backups[@]} -gt 30 ]]; then
+        printf '%s\0' "${backups[@]:30}" | xargs -0 -r rm -f
+    fi
 done
-# Data backups (directories)
-ls -1dt "${BACKUP_DIR}/netbird-data-"*/ 2>/dev/null | tail -n +31 | xargs -r rm -rf
+
+# Rotate data backups (directories, keep newest 30)
+mapfile -t data_backups < <(ls -1dt "$BACKUP_DIR"/netbird-data-*/ 2>/dev/null)
+if [[ ${#data_backups[@]} -gt 30 ]]; then
+    printf '%s\0' "${data_backups[@]:30}" | xargs -0 -r rm -rf
+fi
 
 log "NetBird updated successfully."
 log "Finished."

@@ -2,82 +2,45 @@
 
 # Quick installer: clones/updates repo and runs deploy-all.sh
 # Usage: curl -fsSL https://raw.githubusercontent.com/tolakang/netbird-autoupdate/main/quick-install.sh | sudo bash [INSTALL_DIR]
-#
-# This script:
-#   1. Clones the repo (or updates if already cloned)
-#   2. Runs deploy-all.sh with the specified install dir (or auto-detects)
 
 set -euo pipefail
 
-REPO_URL="https://github.com/tolakang/netbird-autoupdate.git"
-REPO_DIR="/opt/netbird-autoupdate-repo"
+# Get the directory of this script
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+# Source the shared library
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/scripts/lib/common.sh"
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "  NetBird Auto-Update Quick Installer"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
-# Fix git "dubious ownership" error - multiple approaches for robustness:
-# 1. Set safe.directory in current user's config
-# 2. Set safe.directory in root's config (when run via sudo)
-# 3. Set safe.directory in the actual invoking user's config (when run via sudo)
-# 4. Use git -c safe.directory on the pull command itself as a fallback
-
-# Approach 1: Current user (typically root when using sudo)
-git config --global --add safe.directory "$REPO_DIR" 2>/dev/null || true
-
-# Approach 2: Set as root explicitly
-if [[ -d /root ]]; then
-    sudo git config --global --add safe.directory "$REPO_DIR" 2>/dev/null || true
-fi
-
-# Approach 3: Set as the actual user (when invoked via sudo)
-if [[ -n "${SUDO_USER:-}" ]] && [[ "$SUDO_USER" != "root" ]]; then
-    REAL_USER="$SUDO_USER"
-    REAL_HOME=$(getent passwd "$REAL_USER" | cut -d: -f6)
-    if [[ -n "$REAL_HOME" ]] && [[ -d "$REAL_HOME" ]]; then
-        sudo -u "$REAL_USER" git config --global --add safe.directory "$REPO_DIR" 2>/dev/null || true
-    fi
-fi
-
 # Clone or update the repository
-if [[ -d "$REPO_DIR/.git" ]]; then
-    echo "📦 Repository exists at $REPO_DIR"
-    echo "   Pulling latest changes..."
-    cd "$REPO_DIR"
-    # Approach 4: Use git -c to override safe.directory on this specific command
-    sudo git -c safe.directory="$REPO_DIR" -c safe.directory='*' pull origin main
-else
-    echo "📦 Cloning repository to $REPO_DIR..."
-    sudo mkdir -p "$REPO_DIR"
-    sudo chown "${SUDO_USER:-$USER}:${SUDO_USER:-$USER}" "$REPO_DIR" 2>/dev/null || true
-    git -c safe.directory='*' clone "$REPO_URL" "$REPO_DIR"
-    # Mark as safe immediately after clone
-    git config --global --add safe.directory "$REPO_DIR" 2>/dev/null || true
-    cd "$REPO_DIR"
-fi
+clone_or_update_repo
 
 echo ""
 
 # Run deploy-all.sh with any passed argument
-echo "🚀 Running deployment..."
+log_step "Running deployment..."
 echo ""
 
 if [[ $# -gt 0 ]]; then
-    sudo bash "$REPO_DIR/scripts/deploy-all.sh" "$@"
+    sudo bash "$NETBIRD_AUTOUPDATE_REPO_DIR/scripts/deploy-all.sh" "$@"
 else
-    sudo bash "$REPO_DIR/scripts/deploy-all.sh"
+    sudo bash "$NETBIRD_AUTOUPDATE_REPO_DIR/scripts/deploy-all.sh"
 fi
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "  ✅ Installation complete!"
+log_success "Installation complete!"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
-echo "Repository location: $REPO_DIR"
+echo "Repository location: $NETBIRD_AUTOUPDATE_REPO_DIR"
 echo ""
 echo "To update in the future, run:"
-echo "  sudo bash $REPO_DIR/scripts/deploy-all.sh"
+echo "  sudo bash $NETBIRD_AUTOUPDATE_REPO_DIR/scripts/deploy-all.sh"
 echo ""
 echo "To uninstall, run:"
-echo "  sudo bash $REPO_DIR/scripts/uninstall.sh"
+echo "  sudo bash $NETBIRD_AUTOUPDATE_REPO_DIR/scripts/uninstall.sh"

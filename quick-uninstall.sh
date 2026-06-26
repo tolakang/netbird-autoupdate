@@ -5,7 +5,12 @@
 
 set -uo pipefail
 
-REPO_DIR="/opt/netbird-autoupdate-repo"
+# Get the directory of this script
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+# Source the shared library
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/scripts/lib/common.sh"
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "  NetBird Auto-Update Quick Uninstaller"
@@ -13,30 +18,31 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo ""
 
 # If repo exists locally, use its uninstall.sh
-if [[ -f "$REPO_DIR/scripts/uninstall.sh" ]]; then
-    echo "Using uninstall script from: $REPO_DIR"
+if [[ -f "$NETBIRD_AUTOUPDATE_REPO_DIR/scripts/uninstall.sh" ]]; then
+    log_info "Using uninstall script from: $NETBIRD_AUTOUPDATE_REPO_DIR"
     echo ""
     if [[ $# -gt 0 ]]; then
-        sudo bash "$REPO_DIR/scripts/uninstall.sh" "$@"
+        sudo bash "$NETBIRD_AUTOUPDATE_REPO_DIR/scripts/uninstall.sh" "$@"
     else
-        sudo bash "$REPO_DIR/scripts/uninstall.sh"
+        sudo bash "$NETBIRD_AUTOUPDATE_REPO_DIR/scripts/uninstall.sh"
     fi
 else
     # Fallback: download and run uninstall.sh
-    echo "Local repo not found at $REPO_DIR"
-    echo "Downloading uninstall script from GitHub..."
-    TEMP_SCRIPT=$(mktemp)
-    if curl -fsSL https://raw.githubusercontent.com/tolakang/netbird-autoupdate/main/scripts/uninstall.sh -o "$TEMP_SCRIPT" 2>/dev/null; then
-        chmod +x "$TEMP_SCRIPT"
+    log_warn "Local repo not found at $NETBIRD_AUTOUPDATE_REPO_DIR"
+    log_info "Downloading uninstall script from GitHub..."
+
+    local_temp_script=$(mktemp)
+    if curl -fsSL "${NETBIRD_AUTOUPDATE_REPO_URL/raw/main/scripts/uninstall.sh}" -o "$local_temp_script" 2>/dev/null; then
+        chmod +x "$local_temp_script"
         if [[ $# -gt 0 ]]; then
-            sudo bash "$TEMP_SCRIPT" "$@"
+            sudo bash "$local_temp_script" "$@"
         else
-            sudo bash "$TEMP_SCRIPT"
+            sudo bash "$local_temp_script"
         fi
-        rm -f "$TEMP_SCRIPT"
+        rm -f "$local_temp_script"
     else
-        echo "❌ Failed to download uninstall script."
-        echo "   Please clone the repo manually and run: sudo ./scripts/uninstall.sh"
+        log_error "Failed to download uninstall script."
+        echo "Please clone the repo manually and run: sudo ./scripts/uninstall.sh"
         exit 1
     fi
 fi

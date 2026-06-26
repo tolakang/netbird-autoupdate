@@ -6,8 +6,6 @@ Requires=docker.service
 
 [Service]
 Type=oneshot
-# Default installation path is /opt/netbird. To use a different directory,
-# edit this file and change ExecStart, Environment, and ReadWritePaths.
 ExecStart=/opt/netbird/scripts/update-netbird.sh
 Environment=COMPOSE_DIR=/opt/netbird
 Nice=10
@@ -18,6 +16,3 @@ ProtectHome=read-only
 ReadWritePaths=/opt/netbird /opt/netbird/backups /run
 User=root
 Group=root
-
-[Install]
-WantedBy=timers.target
