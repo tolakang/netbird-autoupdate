@@ -1,0 +1,17 @@
+[Unit]
+Description=NetBird Self-Hosted Automatic Update
+Documentation=https://github.com/tolakang/netbird-autoupdate
+After=docker.service network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/netbird/scripts/update-netbird.sh
+Nice=10
+IOSchedulingClass=best-effort
+PrivateTmp=yes
+ProtectSystem=full
+ProtectHome=read-only
+ReadWritePaths=/opt/netbird /opt/netbird/backups /run
+User=root
+Group=root
